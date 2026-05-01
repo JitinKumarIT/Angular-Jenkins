@@ -1,0 +1,55 @@
+pipeline {
+    agent any // Note: Your Jenkins agent must have Node.js and npm installed
+    
+    environment {
+        ARTIFACT_NAME = "angular-production-build.zip"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo "Installing npm dependencies..."
+                // npm ci is used in CI/CD instead of npm install for reliable builds
+                sh 'npm ci' 
+            }
+        }
+
+        stage('Build Angular App') {
+            steps {
+                echo "Compiling Angular app for production..."
+                // This creates the optimized static files in the dist/ folder
+                sh 'npm run build -- --configuration production'
+            }
+        }
+
+        stage('Create & Archive Artifact') {
+            steps {
+                echo "Zipping the build output..."
+                // Zips the contents of the dist folder
+                sh 'zip -r ${ARTIFACT_NAME} dist/'
+                
+                // Archives it so the CD pipeline can grab it
+                archiveArtifacts artifacts: "${ARTIFACT_NAME}", fingerprint: true
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "CI complete! Triggering CD pipeline..."
+            // Triggers the CD job and passes the exact build number to it
+            build job: 'Angular-CD-Pipeline', 
+                  parameters: [string(name: 'UPSTREAM_BUILD_NUMBER', value: String.valueOf(BUILD_NUMBER))], 
+                  wait: false
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
