@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'UPSTREAM_BUILD_NUMBER', defaultValue: 'latest', description: 'Build number from the CI pipeline')
+    }
+
+    environment {
+        ARTIFACT_NAME = "angular-production-build.zip"
+        // In reality, this would be your Nginx or Apache public HTML directory
+        // e.g., /var/www/html/my-angular-app
+        DEPLOY_DIR = "/tmp/production-web-server" 
+    }
+
+    stages {
+        stage('Fetch Artifact') {
+            steps {
+                echo "Fetching artifact from CI Pipeline Build: ${params.UPSTREAM_BUILD_NUMBER}"
+                
+                // Downloads the zip file from the specific CI run
+                copyArtifacts projectName: 'Angular-CI-Pipeline', 
+                              selector: specific("${params.UPSTREAM_BUILD_NUMBER}"), 
+                              filter: "${ARTIFACT_NAME}"
+            }
+        }
+
+        stage('Deploy to Web Server') {
+            steps {
+                sh '''
+                    echo "Starting deployment..."
+                    
+                    # 1. Create the production directory if it doesn't exist
+                    mkdir -p ${DEPLOY_DIR}
+                    
+                    # 2. Extract the static files into the web server directory
+                    unzip -o ${ARTIFACT_NAME} -d ${DEPLOY_DIR}
+                    
+                    echo "Deployment successful!"
+                    echo "Your static Angular assets are now sitting in ${DEPLOY_DIR}/dist"
+                '''
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
